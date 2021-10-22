@@ -1,10 +1,9 @@
-FROM ubuntu:16.04
+FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive 
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-python3 python3-dev python3-pip python3-venv python3-wheel \
-git gcc curl \
+python3 python3-dev python3-pip python3-venv git gcc mongo-tools mongodb-clients curl \
 # lxml
 libxml2-dev libxslt-dev \
 # PIL
@@ -13,18 +12,25 @@ libjpeg-dev zlib1g-dev \
 libmagic-dev \
 && rm -rf /var/lib/apt/lists/* 
 
-WORKDIR /opt/superdesk
-
-# this will activate env for the following commands
-ENV VIRTUAL_ENV=/opt/superdesk/env
-RUN python3 -m venv $VIRTUAL_ENV
+# setup venv
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv "$VIRTUAL_ENV"
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-RUN pip3 install pip==20.3.4
-RUN pip3 install setuptools==50.3.1
-RUN pip3 install wheel
+# update venv
+RUN python3 -m pip install -U pip wheel setuptools
 
+# install server
+WORKDIR /opt/superdesk/
 COPY requirements.txt .
+RUN python3 -m pip install -Ur requirements.txt
 
-RUN pip3 install -U -r /opt/superdesk/requirements.txt
-RUN pip3 install -U honcho gunicorn
+ENV PYTHONUNBUFFERED=1
+ENV C_FORCE_ROOT=False
+ENV CELERYBEAT_SCHEDULE_FILENAME=/tmp/celerybeatschedule.db
+ENV TZ=Europe/London
+
+COPY . .
+
+ENTRYPOINT [ "/opt/superdesk/docker/start.sh" ]
+CMD ["honcho", "start"]

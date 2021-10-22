@@ -4,7 +4,7 @@
  * working directory, but other files may also be specified using relative paths with
  * the SUPERDESK_CONFIG environment variable or the grunt --config flag.
  */
-module.exports = function(grunt) {
+module.exports = function() {
     return {
         apps: ['ansa.superdesk', 'superdesk-planning'],
         importApps: ['../ansa', 'superdesk-planning'],
