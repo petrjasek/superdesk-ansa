@@ -9,6 +9,8 @@
 # AUTHORS and LICENSE files distributed with this source code, or
 # at https://www.sourcefabric.org/superdesk/license
 
+import os
+
 from flask import json
 from pathlib import Path
 from superdesk.default_settings import strtobool, env
