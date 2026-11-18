@@ -8,19 +8,20 @@ logger = logging.getLogger(__name__)
 
 
 def populate_renditions(renditions, item):
-    """Collect removable media while retaining view images for the legal archive."""
+    """Collect removable media and return the view-image IDs kept for the legal archive."""
     rendition_sets = [item.get("renditions") or {}]
     rendition_sets.extend(
         association["renditions"]
         for association in (item.get("associations") or {}).values()
         if association and association.get("renditions")
     )
-    seen_media = {
+    kept_media = {
         str(item_renditions["viewImage"]["media"])
         for item_renditions in rendition_sets
         if item_renditions.get("viewImage") and item_renditions["viewImage"].get("media")
     }
 
+    seen_media = kept_media.copy()
     for item_renditions in rendition_sets:
         for rendition in item_renditions.values():
             if rendition and rendition.get("media"):
@@ -28,6 +29,7 @@ def populate_renditions(renditions, item):
                 if media_id not in seen_media:
                     seen_media.add(media_id)
                     renditions.append({"media": media_id})
+    return kept_media
 
 
 def remove_expired_media(archived_service, item, dry=False, **kwargs):
@@ -40,7 +42,7 @@ def remove_expired_media(archived_service, item, dry=False, **kwargs):
         logger.info("Keeping media for item %s still available in production", item["item_id"])
         return
     renditions = []
-    populate_renditions(renditions, item)
+    kept_media = populate_renditions(renditions, item)
     if renditions and not dry:
         logger.info("Removing %d media files for item %s", len(renditions), item.get("guid"))
     elif not dry:
@@ -51,6 +53,7 @@ def remove_expired_media(archived_service, item, dry=False, **kwargs):
         media_references.delete_action(
             lookup={
                 "item_id": item["item_id"],
+                "media_id": {"$nin": list(kept_media)},
             }
         )
 

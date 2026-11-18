@@ -70,7 +70,10 @@ class RemoveExpiredMediaTestCase(TestCase):
         with patch.object(self.app.media, "delete") as delete_media:
             remove_expired_media(self.archived_service, self.item)
 
-        self.assertEqual([], list(self.references.get_from_mongo(None, {"item_id": self.item["item_id"]})))
+        self.assertCountEqual(
+            ["view-image", "associated-view-image"],
+            [ref["media_id"] for ref in self.references.get_from_mongo(None, {"item_id": self.item["item_id"]})],
+        )
         self.assertCountEqual(
             ["thumbnail", "associated-original"],
             [call.args[0] for call in delete_media.call_args_list],
@@ -101,4 +104,40 @@ class RemoveExpiredMediaTestCase(TestCase):
             RemoveExpiredMediaCommand().run(days=50, skip=0, limit=0)
 
         delete_media.assert_called_once_with("associated-original")
-        self.assertEqual([], list(self.references.get_from_mongo(None, {"item_id": self.item["item_id"]})))
+        self.assertCountEqual(
+            ["associated-view-image"],
+            [ref["media_id"] for ref in self.references.get_from_mongo(None, {"item_id": self.item["item_id"]})],
+        )
+
+    def test_command_keeps_associated_view_image_shared_with_later_item(self):
+        later_item_id = "later-expired-item"
+        shared_media_id = "associated-view-image"
+        expired_at = utcnow() - timedelta(days=60)
+        self.app.data.insert(
+            "legal_archive",
+            [
+                {
+                    "_id": self.item["item_id"],
+                    "versioncreated": expired_at,
+                    "associations": self.item["associations"],
+                },
+                {
+                    "_id": later_item_id,
+                    "versioncreated": expired_at,
+                    "renditions": {"thumbnail": {"media": shared_media_id}},
+                },
+            ],
+        )
+        self.app.data.insert(
+            "media_references",
+            [{"item_id": later_item_id, "media_id": shared_media_id, "published": True}],
+        )
+
+        with patch.object(self.app.media, "delete") as delete_media:
+            RemoveExpiredMediaCommand().run(days=50, skip=0, limit=0)
+
+        delete_media.assert_called_once_with("associated-original")
+        self.assertEqual(
+            [self.item["item_id"]],
+            [ref["item_id"] for ref in self.references.get_from_mongo(None, {"media_id": shared_media_id})],
+        )
